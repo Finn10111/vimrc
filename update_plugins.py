@@ -52,6 +52,11 @@ vim-flake8 https://github.com/nvie/vim-flake8
 vim-pug https://github.com/digitaltoad/vim-pug
 vim-yankstack https://github.com/maxbrunsfeld/vim-yankstack
 lightline.vim https://github.com/itchyny/lightline.vim
+happy_hacking.vim https://github.com/YorickPeterse/happy_hacking.vim
+vmustache https://github.com/tobyS/vmustache
+pdv https://github.com/tobyS/pdv
+ultisnips https://github.com/SirVer/ultisnips
+vim-php-cs-fixer https://github.com/stephpy/vim-php-cs-fixer
 """.strip()
 
 GITHUB_ZIP = '%s/archive/master.zip'
