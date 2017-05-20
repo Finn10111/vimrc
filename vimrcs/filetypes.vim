@@ -17,6 +17,9 @@ au FileType python map <buffer> <leader>1 /class
 au FileType python map <buffer> <leader>2 /def 
 au FileType python map <buffer> <leader>C ?class 
 au FileType python map <buffer> <leader>D ?def 
+au FileType python set cindent
+au FileType python set cinkeys-=0#
+au FileType python set indentkeys-=0#
 
 
 """"""""""""""""""""""""""""""
@@ -60,5 +63,15 @@ au FileType gitcommit call setpos('.', [0, 1, 1, 0])
 " => Shell section
 """"""""""""""""""""""""""""""
 if exists('$TMUX') 
-    set term=screen-256color 
+    if has('nvim')
+        set termguicolors
+    else
+        set term=screen-256color 
+    endif
 endif
+
+
+""""""""""""""""""""""""""""""
+" => Twig section
+""""""""""""""""""""""""""""""
+autocmd BufRead *.twig set syntax=html filetype=html
