@@ -56,6 +56,8 @@ vmustache https://github.com/tobyS/vmustache
 pdv https://github.com/tobyS/pdv
 ultisnips https://github.com/SirVer/ultisnips
 vim-php-cs-fixer https://github.com/stephpy/vim-php-cs-fixer
+tpope-vim-abolish https://github.com/tpope/tpope-vim-abolish
+mru.vim https://github.com/vim-scripts/mru.vim
 """.strip()
 
 GITHUB_ZIP = '%s/archive/master.zip'
