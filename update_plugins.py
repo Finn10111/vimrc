@@ -58,6 +58,8 @@ ultisnips https://github.com/SirVer/ultisnips
 vim-php-cs-fixer https://github.com/stephpy/vim-php-cs-fixer
 tpope-vim-abolish https://github.com/tpope/tpope-vim-abolish
 mru.vim https://github.com/vim-scripts/mru.vim
+vim-javascript https://github.com/pangloss/vim-javascript
+vim-mustache-handlebars https://github.com/mustache/vim-mustache-handlebars
 """.strip()
 
 GITHUB_ZIP = '%s/archive/master.zip'

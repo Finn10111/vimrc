@@ -221,6 +221,7 @@ augroup gitgutter
     if !has('gui_win32')
       autocmd FocusGained * call gitgutter#all()
     endif
+
   else
     autocmd BufRead,BufWritePost,FileChangedShellPost * call gitgutter#process_buffer(bufnr(''), 0)
   endif
