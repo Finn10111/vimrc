@@ -59,11 +59,9 @@ fu! ctrlp#line#accept(dict)
 	let bufnr = str2nr(get(info, 1))
 	if bufnr
 		cal ctrlp#acceptfile(mode, bufnr, get(info, 2))
-		if !empty(input)
-			let @/ = input
-			call search(input, 'c')
-			call histadd("search", input)
-		en
+		let @/ = input
+		call search(input, 'c')
+		call histadd("search", input)
 	en
 endf
 

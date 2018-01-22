@@ -45,9 +45,9 @@ function! go#path#Default() abort
   return $GOPATH
 endfunction
 
-" s:HasPath checks whether the given path exists in GOPATH environment variable
+" HasPath checks whether the given path exists in GOPATH environment variable
 " or not
-function! s:HasPath(path) abort
+function! go#path#HasPath(path) abort
   let go_paths = split(go#path#Default(), go#util#PathListSep())
   let last_char = strlen(a:path) - 1
 
@@ -94,11 +94,11 @@ function! go#path#Detect() abort
     " gb vendor plugin
     " (https://github.com/constabulary/gb/tree/master/cmd/gb-vendor)
     let gb_vendor_root = src_path . "vendor" . go#util#PathSep()
-    if isdirectory(gb_vendor_root) && !s:HasPath(gb_vendor_root)
+    if isdirectory(gb_vendor_root) && !go#path#HasPath(gb_vendor_root)
       let gopath = gb_vendor_root . go#util#PathListSep() . gopath
     endif
 
-    if !s:HasPath(src_path)
+    if !go#path#HasPath(src_path)
       let gopath =  src_path . go#util#PathListSep() . gopath
     endif
   endif
@@ -108,7 +108,7 @@ function! go#path#Detect() abort
   if !empty(godeps_root)
     let godeps_path = join([fnamemodify(godeps_root, ':p:h:h'), "Godeps", "_workspace" ], go#util#PathSep())
 
-    if !s:HasPath(godeps_path)
+    if !go#path#HasPath(godeps_path)
       let gopath =  godeps_path . go#util#PathListSep() . gopath
     endif
   endif
@@ -164,7 +164,7 @@ function! go#path#CheckBinPath(binpath) abort
     let $PATH = old_path
 
     if go#util#IsUsingCygwinShell() == 1
-      return s:CygwinPath(binpath)
+      return go#path#CygwinPath(binpath)
     endif
 
     return binpath
@@ -183,13 +183,13 @@ function! go#path#CheckBinPath(binpath) abort
   let $PATH = old_path
 
   if go#util#IsUsingCygwinShell() == 1
-    return s:CygwinPath(a:binpath)
+    return go#path#CygwinPath(a:binpath)
   endif
 
   return go_bin_path . go#util#PathSep() . basename
 endfunction
 
-function! s:CygwinPath(path)
+function! go#path#CygwinPath(path)
    return substitute(a:path, '\\', '/', "g")
 endfunction
 

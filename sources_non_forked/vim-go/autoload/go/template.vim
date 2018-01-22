@@ -6,12 +6,9 @@ function! go#template#create() abort
 
   let cd = exists('*haslocaldir') && haslocaldir() ? 'lcd ' : 'cd '
   let dir = getcwd()
-  let l:package_name = -1
+  execute cd . fnameescape(expand("%:p:h"))
 
-  if isdirectory(expand('%:p:h'))
-    execute cd . fnameescape(expand('%:p:h'))
-    let l:package_name = go#tool#PackageName()
-  endif
+  let l:package_name = go#tool#PackageName()
 
   " if we can't figure out any package name(no Go files or non Go package
   " files) from the directory create the template or use the cwd

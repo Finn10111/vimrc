@@ -112,7 +112,6 @@ let s:_DEFAULT_CHECKERS = {
         \ 'yacc':          ['bison'],
         \ 'yaml':          ['jsyaml'],
         \ 'yang':          ['pyang'],
-        \ 'yara':          ['yarac'],
         \ 'z80':           ['z80syntaxchecker'],
         \ 'zpt':           ['zptlint'],
         \ 'zsh':           ['zsh'],

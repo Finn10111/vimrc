@@ -32,3 +32,4 @@ function! s:Notifier.GetListenersForEvent(name)
 endfunction
 
 let g:NERDTreePathNotifier = deepcopy(s:Notifier)
+
