@@ -31,10 +31,6 @@ https://github.com/itchyny/lightline.vim
 
 ![lightline.vim - seoul256](https://raw.githubusercontent.com/wiki/itchyny/lightline.vim/image/seoul256.png)
 
-### Dracula
-
-![lightline.vim - Dracula](https://raw.githubusercontent.com/wiki/itchyny/lightline.vim/image/Dracula.png)
-
 ### one
 
 ![lightline.vim - one](https://raw.githubusercontent.com/wiki/itchyny/lightline.vim/image/one.png)
@@ -43,7 +39,7 @@ https://github.com/itchyny/lightline.vim
 
 ![lightline.vim - landscape](https://raw.githubusercontent.com/wiki/itchyny/lightline.vim/image/landscape.png)
 
-landscape is my colorscheme, which is a high-contrast cui-supported colorscheme, available at https://github.com/itchyny/landscape.vim
+landscape is my colorscheme, which is a high-contrast cterm-supported colorscheme, available at https://github.com/itchyny/landscape.vim
 
 ## Why yet another clone of powerline?
 + [vim-powerline](https://github.com/Lokaltog/vim-powerline) is a nice plugin, but deprecated.
@@ -51,7 +47,7 @@ landscape is my colorscheme, which is a high-contrast cui-supported colorscheme,
 + [vim-airline](https://github.com/vim-airline/vim-airline) is a nice plugin, but it uses too much functions of other plugins, which should be done by users in `.vimrc`.
 
 ## Spirit of this plugin
-+ Minimalism. The core script is very small to achive enough functions as a statusline plugin.
++ Minimalism. The core script is very small to achieve enough functions as a statusline plugin.
 + Configurability. You can create your own component and easily add to the statusline and the tabline.
 + Orthogonality. The plugin does not rely on the implementation of other plugins. Such plugin crossing settings should be configured by users.
 
@@ -110,7 +106,7 @@ if !has('gui_running')
 endif
 ```
 
-Your statusline appears to work correctly? If yes, great, thanks for choosing lightline.vim! If no, please file a issue report to the [issue tracker](https://github.com/itchyny/lightline.vim/issues).
+Your statusline appears to work correctly? If yes, great, thanks for choosing lightline.vim! If no, please file an issue report to the [issue tracker](https://github.com/itchyny/lightline.vim/issues).
 
 By the way, `-- INSERT --` is unnecessary anymore because the mode information is displayed in the statusline.
 ![lightline.vim - tutorial](https://raw.githubusercontent.com/wiki/itchyny/lightline.vim/image/tutorial/13.png)
