@@ -54,7 +54,7 @@ vim-pug https://github.com/digitaltoad/vim-pug
 lightline.vim https://github.com/itchyny/lightline.vim
 happy_hacking.vim https://github.com/YorickPeterse/happy_hacking.vim
 vmustache https://github.com/tobyS/vmustache
-pdv https://github.com/tobyS/pdv
+pdv https://github.com/YaroslavMolchan/pdv
 ultisnips https://github.com/SirVer/ultisnips
 vim-php-cs-fixer https://github.com/stephpy/vim-php-cs-fixer
 tpope-vim-abolish https://github.com/tpope/tpope-vim-abolish
