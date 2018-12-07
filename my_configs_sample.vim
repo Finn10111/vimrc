@@ -27,3 +27,8 @@ let g:ale_lint_on_enter = 1
 " for older versions of vim (vim-go requires Vim 7.4.1689 or Neovim, but you're using an older version.)
 let g:go_version_warning = 0
 
+" php cbf
+let g:phpfmt_autosave = 0
+let g:phpfmt_command = '/usr/bin/phpcbf'
+let g:phpfmt_standard = 'PSR2'
+

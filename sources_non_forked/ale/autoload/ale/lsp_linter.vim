@@ -38,7 +38,7 @@ function! s:HandleLSPDiagnostics(conn_id, response) abort
 
     let l:loclist = ale#lsp#response#ReadDiagnostics(a:response)
 
-    call ale#engine#HandleLoclist(l:linter_name, l:buffer, l:loclist)
+    call ale#engine#HandleLoclist(l:linter_name, l:buffer, l:loclist, 0)
 endfunction
 
 function! s:HandleTSServerDiagnostics(response, error_type) abort
@@ -55,20 +55,33 @@ function! s:HandleTSServerDiagnostics(response, error_type) abort
     endif
 
     let l:thislist = ale#lsp#response#ReadTSServerDiagnostics(a:response)
+    let l:no_changes = 0
 
     " tsserver sends syntax and semantic errors in separate messages, so we
     " have to collect the messages separately for each buffer and join them
     " back together again.
     if a:error_type is# 'syntax'
+        if len(l:thislist) is 0 && len(get(l:info, 'syntax_loclist', [])) is 0
+            let l:no_changes = 1
+        endif
+
         let l:info.syntax_loclist = l:thislist
     else
+        if len(l:thislist) is 0 && len(get(l:info, 'semantic_loclist', [])) is 0
+            let l:no_changes = 1
+        endif
+
         let l:info.semantic_loclist = l:thislist
+    endif
+
+    if l:no_changes
+        return
     endif
 
     let l:loclist = get(l:info, 'semantic_loclist', [])
     \   + get(l:info, 'syntax_loclist', [])
 
-    call ale#engine#HandleLoclist(l:linter_name, l:buffer, l:loclist)
+    call ale#engine#HandleLoclist(l:linter_name, l:buffer, l:loclist, 0)
 endfunction
 
 function! s:HandleLSPErrorMessage(linter_name, response) abort
@@ -99,9 +112,10 @@ endfunction
 
 function! ale#lsp_linter#HandleLSPResponse(conn_id, response) abort
     let l:method = get(a:response, 'method', '')
-    let l:linter_name = get(s:lsp_linter_map, a:conn_id, '')
 
     if get(a:response, 'jsonrpc', '') is# '2.0' && has_key(a:response, 'error')
+        let l:linter_name = get(s:lsp_linter_map, a:conn_id, '')
+
         call s:HandleLSPErrorMessage(l:linter_name, a:response)
     elseif l:method is# 'textDocument/publishDiagnostics'
         call s:HandleLSPDiagnostics(a:conn_id, a:response)
@@ -114,10 +128,33 @@ function! ale#lsp_linter#HandleLSPResponse(conn_id, response) abort
     endif
 endfunction
 
-" Given a buffer, an LSP linter, and a callback to register for handling
-" messages, start up an LSP linter and get ready to receive errors or
-" completions.
-function! ale#lsp_linter#StartLSP(buffer, linter, callback) abort
+function! ale#lsp_linter#GetOptions(buffer, linter) abort
+    let l:initialization_options = {}
+
+    if has_key(a:linter, 'initialization_options_callback')
+        let l:initialization_options = ale#util#GetFunction(a:linter.initialization_options_callback)(a:buffer)
+    elseif has_key(a:linter, 'initialization_options')
+        let l:initialization_options = a:linter.initialization_options
+    endif
+
+    return l:initialization_options
+endfunction
+
+function! ale#lsp_linter#GetConfig(buffer, linter) abort
+    let l:config = {}
+
+    if has_key(a:linter, 'lsp_config_callback')
+        let l:config = ale#util#GetFunction(a:linter.lsp_config_callback)(a:buffer)
+    elseif has_key(a:linter, 'lsp_config')
+        let l:config = a:linter.lsp_config
+    endif
+
+    return l:config
+endfunction
+
+" Given a buffer, an LSP linter, start up an LSP linter and get ready to
+" receive messages for the document.
+function! ale#lsp_linter#StartLSP(buffer, linter) abort
     let l:command = ''
     let l:address = ''
     let l:root = ale#util#GetFunction(a:linter.project_root_callback)(a:buffer)
@@ -128,51 +165,43 @@ function! ale#lsp_linter#StartLSP(buffer, linter, callback) abort
         return {}
     endif
 
-    let l:initialization_options = {}
-
-    if has_key(a:linter, 'initialization_options_callback')
-        let l:initialization_options = ale#util#GetFunction(a:linter.initialization_options_callback)(a:buffer)
-    elseif has_key(a:linter, 'initialization_options')
-        let l:initialization_options = a:linter.initialization_options
-    endif
+    let l:init_options = ale#lsp_linter#GetOptions(a:buffer, a:linter)
 
     if a:linter.lsp is# 'socket'
         let l:address = ale#linter#GetAddress(a:buffer, a:linter)
-        let l:conn_id = ale#lsp#ConnectToAddress(
-        \   l:address,
-        \   l:root,
-        \   a:callback,
-        \   l:initialization_options,
-        \)
+        let l:conn_id = ale#lsp#Register(l:address, l:root, l:init_options)
+        let l:ready = ale#lsp#ConnectToAddress(l:conn_id, l:address)
     else
         let l:executable = ale#linter#GetExecutable(a:buffer, a:linter)
 
-        if !executable(l:executable)
+        if empty(l:executable) || !executable(l:executable)
             return {}
         endif
 
-        let l:command = ale#job#PrepareCommand(
-        \   a:buffer,
-        \   ale#linter#GetCommand(a:buffer, a:linter),
-        \)
-        let l:conn_id = ale#lsp#StartProgram(
-        \   l:executable,
-        \   l:command,
-        \   l:root,
-        \   a:callback,
-        \   l:initialization_options,
-        \)
+        let l:conn_id = ale#lsp#Register(l:executable, l:root, l:init_options)
+
+        let l:command = ale#linter#GetCommand(a:buffer, a:linter)
+        " Format the command, so %e can be formatted into it.
+        let l:command = ale#command#FormatCommand(a:buffer, l:executable, l:command, 0)[1]
+        let l:command = ale#job#PrepareCommand(a:buffer, l:command)
+        let l:ready = ale#lsp#StartProgram(l:conn_id, l:executable, l:command)
     endif
 
-    let l:language_id = ale#util#GetFunction(a:linter.language_callback)(a:buffer)
-
-    if !l:conn_id
+    if !l:ready
         if g:ale_history_enabled && !empty(l:command)
             call ale#history#Add(a:buffer, 'failed', l:conn_id, l:command)
         endif
 
         return {}
     endif
+
+    " tsserver behaves differently, so tell the LSP API that it is tsserver.
+    if a:linter.lsp is# 'tsserver'
+        call ale#lsp#MarkConnectionAsTsserver(l:conn_id)
+    endif
+
+    let l:config = ale#lsp_linter#GetConfig(a:buffer, a:linter)
+    let l:language_id = ale#util#GetFunction(a:linter.language_callback)(a:buffer)
 
     let l:details = {
     \   'buffer': a:buffer,
@@ -182,7 +211,9 @@ function! ale#lsp_linter#StartLSP(buffer, linter, callback) abort
     \   'language_id': l:language_id,
     \}
 
-    if ale#lsp#OpenDocument(l:details)
+    call ale#lsp#UpdateConfig(l:conn_id, a:buffer, l:config)
+
+    if ale#lsp#OpenDocument(l:conn_id, a:buffer, l:language_id)
         if g:ale_history_enabled && !empty(l:command)
             call ale#history#Add(a:buffer, 'started', l:conn_id, l:command)
         endif
@@ -190,7 +221,7 @@ function! ale#lsp_linter#StartLSP(buffer, linter, callback) abort
 
     " The change message needs to be sent for tsserver before doing anything.
     if a:linter.lsp is# 'tsserver'
-        call ale#lsp#NotifyForChanges(l:details)
+        call ale#lsp#NotifyForChanges(l:conn_id, a:buffer)
     endif
 
     return l:details
@@ -198,38 +229,33 @@ endfunction
 
 function! ale#lsp_linter#CheckWithLSP(buffer, linter) abort
     let l:info = g:ale_buffer_info[a:buffer]
-    let l:lsp_details = ale#lsp_linter#StartLSP(
-    \   a:buffer,
-    \   a:linter,
-    \   function('ale#lsp_linter#HandleLSPResponse'),
-    \)
+    let l:lsp_details = ale#lsp_linter#StartLSP(a:buffer, a:linter)
 
     if empty(l:lsp_details)
         return 0
     endif
 
     let l:id = l:lsp_details.connection_id
-    let l:root = l:lsp_details.project_root
+
+    " Register a callback now for handling errors now.
+    let l:Callback = function('ale#lsp_linter#HandleLSPResponse')
+    call ale#lsp#RegisterCallback(l:id, l:Callback)
 
     " Remember the linter this connection is for.
     let s:lsp_linter_map[l:id] = a:linter.name
 
     if a:linter.lsp is# 'tsserver'
         let l:message = ale#lsp#tsserver_message#Geterr(a:buffer)
-        let l:request_id = ale#lsp#Send(l:id, l:message, l:root)
-
-        let l:notified = l:request_id != 0
+        let l:notified = ale#lsp#Send(l:id, l:message) != 0
     else
-        let l:notified = ale#lsp#NotifyForChanges(l:lsp_details)
+        let l:notified = ale#lsp#NotifyForChanges(l:id, a:buffer)
     endif
 
     " If this was a file save event, also notify the server of that.
     if a:linter.lsp isnot# 'tsserver'
     \&& getbufvar(a:buffer, 'ale_save_event_fired', 0)
         let l:save_message = ale#lsp#message#DidSave(a:buffer)
-        let l:request_id = ale#lsp#Send(l:id, l:save_message, l:root)
-
-        let l:notified = l:request_id != 0
+        let l:notified = ale#lsp#Send(l:id, l:save_message) != 0
     endif
 
     if l:notified

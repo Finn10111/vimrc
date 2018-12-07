@@ -1,3 +1,7 @@
+" don't spam the user when Vim is started in Vi compatibility mode
+let s:cpo_save = &cpo
+set cpo&vim
+
 " From "go list -h".
 function! go#tool#ValidFiles(...)
   let l:list = ["GoFiles", "CgoFiles", "IgnoredGoFiles", "CFiles", "CXXFiles",
@@ -76,12 +80,12 @@ function! go#tool#Imports() abort
   return imports
 endfunction
 
-function! go#tool#Info(auto) abort
+function! go#tool#Info(showstatus) abort
   let l:mode = go#config#InfoMode()
   if l:mode == 'gocode'
-    call go#complete#Info(a:auto)
+    call go#complete#Info(a:showstatus)
   elseif l:mode == 'guru'
-    call go#guru#DescribeInfo()
+    call go#guru#DescribeInfo(a:showstatus)
   else
     call go#util#EchoError('go_info_mode value: '. l:mode .' is not valid. Valid values are: [gocode, guru]')
   endif
@@ -212,5 +216,9 @@ function! go#tool#OpenBrowser(url) abort
         call go#util#System(l:cmd)
     endif
 endfunction
+
+" restore Vi compatibility settings
+let &cpo = s:cpo_save
+unlet s:cpo_save
 
 " vim: sw=2 ts=2 et

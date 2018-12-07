@@ -14,7 +14,7 @@ let g:loaded_ale_dont_use_this_in_other_plugins_please = 1
 
 " A flag for detecting if the required features are set.
 if has('nvim')
-    let s:has_features = has('timers')
+    let s:has_features = has('timers') && has('nvim-0.2.0')
 else
     " Check if Job and Channel functions are available, instead of the
     " features. This works better on old MacVim versions.
@@ -24,7 +24,7 @@ endif
 if !s:has_features
     " Only output a warning if editing some special files.
     if index(['', 'gitcommit'], &filetype) == -1
-        execute 'echoerr ''ALE requires NeoVim >= 0.1.5 or Vim 8 with +timers +job +channel'''
+        execute 'echoerr ''ALE requires NeoVim >= 0.2.0 or Vim 8 with +timers +job +channel'''
         execute 'echoerr ''Please update your editor appropriately.'''
     endif
 
@@ -32,24 +32,14 @@ if !s:has_features
     finish
 endif
 
-" remove in 2.0
-if has('nvim') && !has('nvim-0.2.0') && !get(g:, 'ale_use_deprecated_neovim')
-    execute 'echom ''ALE support for NeoVim versions below 0.2.0 is deprecated.'''
-    execute 'echom ''Use `let g:ale_use_deprecated_neovim = 1` to silence this warning for now.'''
-endif
-
 " Set this flag so that other plugins can use it, like airline.
 let g:loaded_ale = 1
-
-" Set the TMPDIR environment variable if it is not set automatically.
-" This can automatically fix some environments.
-if has('unix') && empty($TMPDIR)
-    let $TMPDIR = '/tmp'
-endif
 
 " This global variable is used internally by ALE for tracking information for
 " each buffer which linters are being run against.
 let g:ale_buffer_info = {}
+" This global Dictionary tracks data for fixing code. Don't mess with it.
+let g:ale_fix_buffer_data = {}
 
 " User Configuration
 
@@ -119,11 +109,18 @@ let g:ale_set_highlights = get(g:, 'ale_set_highlights', has('syntax'))
 " This flag can be set to 0 to disable echoing when the cursor moves.
 let g:ale_echo_cursor = get(g:, 'ale_echo_cursor', 1)
 
+" This flag can be set to 1 to automatically show errors in the preview window.
+let g:ale_cursor_detail = get(g:, 'ale_cursor_detail', 0)
+
+" This flag can be set to 1 to enable virtual text when the cursor moves.
+let g:ale_virtualtext_cursor = get(g:, 'ale_virtualtext_cursor', 0)
+
+" This flag can be set to 1 to automatically close the preview window upon
+" entering Insert Mode.
+let g:ale_close_preview_on_insert = get(g:, 'ale_close_preview_on_insert', 0)
+
 " This flag can be set to 0 to disable balloon support.
-let g:ale_set_balloons = get(g:, 'ale_set_balloons',
-\   (has('balloon_eval') && has('gui_running'))
-\   || (has('balloon_eval_term') && !has('gui_running'))
-\)
+let g:ale_set_balloons = get(g:, 'ale_set_balloons', has('balloon_eval') && has('gui_running'))
 
 " This flag can be set to 0 to disable warnings for trailing whitespace
 let g:ale_warn_about_trailing_whitespace = get(g:, 'ale_warn_about_trailing_whitespace', 1)
@@ -138,6 +135,9 @@ let g:ale_history_log_output = get(g:, 'ale_history_log_output', 1)
 
 " Enable automatic completion with LSP servers and tsserver
 let g:ale_completion_enabled = get(g:, 'ale_completion_enabled', 0)
+
+" Enable automatic detection of pipenv for Python linters.
+let g:ale_python_auto_pipenv = get(g:, 'ale_python_auto_pipenv', 0)
 
 if g:ale_set_balloons
     call ale#balloon#Enable()
@@ -197,6 +197,9 @@ command! -bar ALEFindReferences :call ale#references#Find()
 command! -bar ALEHover :call ale#hover#Show(bufnr(''), getcurpos()[1],
                                             \ getcurpos()[2], {})
 
+" Search for appearances of a symbol, such as a type name or function name.
+command! -nargs=1 ALESymbolSearch :call ale#symbol#Search(<q-args>)
+
 " <Plug> mappings for commands
 nnoremap <silent> <Plug>(ale_previous) :ALEPrevious<Return>
 nnoremap <silent> <Plug>(ale_previous_wrap) :ALEPreviousWrap<Return>
@@ -230,26 +233,8 @@ augroup ALECleanupGroup
     " Clean up buffers automatically when they are unloaded.
     autocmd BufDelete * if exists('*ale#engine#Cleanup') | call ale#engine#Cleanup(str2nr(expand('<abuf>'))) | endif
     autocmd QuitPre * call ale#events#QuitEvent(str2nr(expand('<abuf>')))
+
+    if exists('##VimSuspend')
+      autocmd VimSuspend * if exists('*ale#engine#CleanupEveryBuffer') | call ale#engine#CleanupEveryBuffer() | endif
+    endif
 augroup END
-
-" Backwards Compatibility
-
-" remove in 2.0
-function! ALELint(delay) abort
-    if !get(g:, 'ale_deprecation_ale_lint', 0)
-        execute 'echom ''ALELint() is deprecated, use ale#Queue() instead.'''
-        let g:ale_deprecation_ale_lint = 1
-    endif
-
-    call ale#Queue(a:delay)
-endfunction
-
-" remove in 2.0
-function! ALEGetStatusLine() abort
-    if !get(g:, 'ale_deprecation_ale_get_status_line', 0)
-        execute 'echom ''ALEGetStatusLine() is deprecated.'''
-        let g:ale_deprecation_ale_get_status_line = 1
-    endif
-
-    return ale#statusline#Status()
-endfunction

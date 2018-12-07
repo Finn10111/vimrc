@@ -1,6 +1,17 @@
 " Author: w0rp <devw0rp@gmail.com>
 " Description: Completion support for LSP linters
 
+" The omnicompletion menu is shown through a special Plug mapping which is
+" only valid in Insert mode. This way, feedkeys() won't send these keys if you
+" quit Insert mode quickly enough.
+inoremap <silent> <Plug>(ale_show_completion_menu) <C-x><C-o>
+" If we hit the key sequence in normal mode, then we won't show the menu, so
+" we should restore the old settings right away.
+nnoremap <silent> <Plug>(ale_show_completion_menu) :call ale#completion#RestoreCompletionOptions()<CR>
+cnoremap <silent> <Plug>(ale_show_completion_menu) <Nop>
+vnoremap <silent> <Plug>(ale_show_completion_menu) <Nop>
+onoremap <silent> <Plug>(ale_show_completion_menu) <Nop>
+
 let g:ale_completion_delay = get(g:, 'ale_completion_delay', 100)
 let g:ale_completion_excluded_words = get(g:, 'ale_completion_excluded_words', [])
 let g:ale_completion_max_suggestions = get(g:, 'ale_completion_max_suggestions', 50)
@@ -28,10 +39,14 @@ let s:LSP_COMPLETION_COLOR_KIND = 16
 let s:LSP_COMPLETION_FILE_KIND = 17
 let s:LSP_COMPLETION_REFERENCE_KIND = 18
 
+let s:lisp_regex = '\v[a-zA-Z_\-][a-zA-Z_\-0-9]*$'
+
 " Regular expressions for checking the characters in the line before where
 " the insert cursor is. If one of these matches, we'll check for completions.
 let s:should_complete_map = {
 \   '<default>': '\v[a-zA-Z$_][a-zA-Z$_0-9]*$|\.$',
+\   'clojure': s:lisp_regex,
+\   'lisp': s:lisp_regex,
 \   'typescript': '\v[a-zA-Z$_][a-zA-Z$_0-9]*$|\.$|''$|"$',
 \   'rust': '\v[a-zA-Z$_][a-zA-Z$_0-9]*$|\.$|::$',
 \}
@@ -64,6 +79,7 @@ endfunction
 " Check if we should look for completions for a language.
 function! ale#completion#GetPrefix(filetype, line, column) abort
     let l:regex = s:GetFiletypeValue(s:should_complete_map, a:filetype)
+
     " The column we're using completions for is where we are inserting text,
     " like so:
     "   abc
@@ -82,14 +98,15 @@ function! ale#completion#GetTriggerCharacter(filetype, prefix) abort
     return ''
 endfunction
 
-function! ale#completion#Filter(buffer, suggestions, prefix) abort
+function! ale#completion#Filter(buffer, filetype, suggestions, prefix) abort
     let l:excluded_words = ale#Var(a:buffer, 'completion_excluded_words')
+    let l:triggers = s:GetFiletypeValue(s:trigger_character_map, a:filetype)
 
     " For completing...
     "   foo.
     "       ^
     " We need to include all of the given suggestions.
-    if a:prefix is# '.'
+    if index(l:triggers, a:prefix) >= 0
         let l:filtered_suggestions = a:suggestions
     else
         let l:filtered_suggestions = []
@@ -102,7 +119,7 @@ function! ale#completion#Filter(buffer, suggestions, prefix) abort
         for l:item in a:suggestions
             " A List of String values or a List of completion item Dictionaries
             " is accepted here.
-            let l:word = type(l:item) == type('') ? l:item : l:item.word
+            let l:word = type(l:item) is v:t_string ? l:item : l:item.word
 
             " Add suggestions if the suggestion starts with a case-insensitive
             " match for the prefix.
@@ -122,19 +139,48 @@ function! ale#completion#Filter(buffer, suggestions, prefix) abort
         " Remove suggestions with words in the exclusion List.
         call filter(
         \   l:filtered_suggestions,
-        \   'index(l:excluded_words, type(v:val) is type('''') ? v:val : v:val.word) < 0',
+        \   'index(l:excluded_words, type(v:val) is v:t_string ? v:val : v:val.word) < 0',
         \)
     endif
 
     return l:filtered_suggestions
 endfunction
 
-function! s:ReplaceCompleteopt() abort
+function! s:ReplaceCompletionOptions() abort
+    " Remember the old omnifunc value, if there is one.
+    " If we don't store an old one, we'll just never reset the option.
+    " This will stop some random exceptions from appearing.
+    if !exists('b:ale_old_omnifunc') && !empty(&l:omnifunc)
+        let b:ale_old_omnifunc = &l:omnifunc
+    endif
+
+    let &l:omnifunc = 'ale#completion#OmniFunc'
+
     if !exists('b:ale_old_completopt')
         let b:ale_old_completopt = &l:completeopt
     endif
 
-    let &l:completeopt = 'menu,menuone,preview,noselect,noinsert'
+    if &l:completeopt =~# 'preview'
+        let &l:completeopt = 'menu,menuone,preview,noselect,noinsert'
+    else
+        let &l:completeopt = 'menu,menuone,noselect,noinsert'
+    endif
+endfunction
+
+function! ale#completion#RestoreCompletionOptions() abort
+    " Reset settings when completion is done.
+    if exists('b:ale_old_omnifunc')
+        if b:ale_old_omnifunc isnot# 'pythoncomplete#Complete'
+            let &l:omnifunc = b:ale_old_omnifunc
+        endif
+
+        unlet b:ale_old_omnifunc
+    endif
+
+    if exists('b:ale_old_completopt')
+        let &l:completeopt = b:ale_old_completopt
+        unlet b:ale_old_completopt
+    endif
 endfunction
 
 function! ale#completion#OmniFunc(findstart, base) abort
@@ -159,33 +205,32 @@ function! ale#completion#OmniFunc(findstart, base) abort
             let b:ale_completion_result = function(l:parser)(l:response)
         endif
 
-        call s:ReplaceCompleteopt()
+        call s:ReplaceCompletionOptions()
 
         return get(b:, 'ale_completion_result', [])
     endif
 endfunction
 
 function! ale#completion#Show(response, completion_parser) abort
-    " Remember the old omnifunc value, if there is one.
-    " If we don't store an old one, we'll just never reset the option.
-    " This will stop some random exceptions from appearing.
-    if !exists('b:ale_old_omnifunc') && !empty(&l:omnifunc)
-        let b:ale_old_omnifunc = &l:omnifunc
+    if ale#util#Mode() isnot# 'i'
+        return
     endif
 
     " Set the list in the buffer, temporarily replace omnifunc with our
     " function, and then start omni-completion.
     let b:ale_completion_response = a:response
     let b:ale_completion_parser = a:completion_parser
-    let &l:omnifunc = 'ale#completion#OmniFunc'
-    call s:ReplaceCompleteopt()
-    call ale#util#FeedKeys("\<C-x>\<C-o>", 'n')
+    " Replace completion options shortly before opening the menu.
+    call s:ReplaceCompletionOptions()
+
+    call timer_start(0, {-> ale#util#FeedKeys("\<Plug>(ale_show_completion_menu)")})
 endfunction
 
 function! s:CompletionStillValid(request_id) abort
     let [l:line, l:column] = getcurpos()[1:2]
 
-    return has_key(b:, 'ale_completion_info')
+    return ale#util#Mode() is# 'i'
+    \&& has_key(b:, 'ale_completion_info')
     \&& b:ale_completion_info.request_id == a:request_id
     \&& b:ale_completion_info.line == l:line
     \&& b:ale_completion_info.column == l:column
@@ -220,7 +265,7 @@ function! ale#completion#ParseTSServerCompletionEntryDetails(response) abort
             call add(l:documentationParts, l:part.text)
         endfor
 
-        if l:suggestion.kind is# 'clasName'
+        if l:suggestion.kind is# 'className'
             let l:kind = 'f'
         elseif l:suggestion.kind is# 'parameterName'
             let l:kind = 'f'
@@ -278,10 +323,10 @@ function! ale#completion#ParseLSPCompletions(response) abort
 
     let l:item_list = []
 
-    if type(get(a:response, 'result')) is type([])
+    if type(get(a:response, 'result')) is v:t_list
         let l:item_list = a:response.result
-    elseif type(get(a:response, 'result')) is type({})
-    \&& type(get(a:response.result, 'items')) is type([])
+    elseif type(get(a:response, 'result')) is v:t_dict
+    \&& type(get(a:response.result, 'items')) is v:t_list
         let l:item_list = a:response.result.items
     endif
 
@@ -299,7 +344,9 @@ function! ale#completion#ParseLSPCompletions(response) abort
         endif
 
         " See :help complete-items for Vim completion kinds
-        if l:item.kind is s:LSP_COMPLETION_METHOD_KIND
+        if !has_key(l:item, 'kind')
+            let l:kind = 'v'
+        elseif l:item.kind is s:LSP_COMPLETION_METHOD_KIND
             let l:kind = 'm'
         elseif l:item.kind is s:LSP_COMPLETION_CONSTRUCTOR_KIND
             let l:kind = 'm'
@@ -313,17 +360,23 @@ function! ale#completion#ParseLSPCompletions(response) abort
             let l:kind = 'v'
         endif
 
+        let l:doc = get(l:item, 'documentation', '')
+
+        if type(l:doc) is v:t_dict && has_key(l:doc, 'value')
+            let l:doc = l:doc.value
+        endif
+
         call add(l:results, {
         \   'word': l:word,
         \   'kind': l:kind,
         \   'icase': 1,
         \   'menu': get(l:item, 'detail', ''),
-        \   'info': get(l:item, 'documentation', ''),
+        \   'info': (type(l:doc) is v:t_string ? l:doc : ''),
         \})
     endfor
 
     if has_key(l:info, 'prefix')
-        return ale#completion#Filter(l:buffer, l:results, l:info.prefix)
+        return ale#completion#Filter(l:buffer, &filetype, l:results, l:info.prefix)
     endif
 
     return l:results
@@ -344,6 +397,7 @@ function! ale#completion#HandleTSServerResponse(conn_id, response) abort
     if l:command is# 'completions'
         let l:names = ale#completion#Filter(
         \   l:buffer,
+        \   &filetype,
         \   ale#completion#ParseTSServerCompletions(a:response),
         \   b:ale_completion_info.prefix,
         \)[: g:ale_completion_max_suggestions - 1]
@@ -383,19 +437,19 @@ function! ale#completion#HandleLSPResponse(conn_id, response) abort
     \)
 endfunction
 
-function! s:GetLSPCompletions(linter) abort
-    let l:buffer = bufnr('')
+function! s:OnReady(linter, lsp_details, ...) abort
+    let l:buffer = a:lsp_details.buffer
+    let l:id = a:lsp_details.connection_id
+
+    " If we have sent a completion request already, don't send another.
+    if b:ale_completion_info.request_id
+        return
+    endif
+
     let l:Callback = a:linter.lsp is# 'tsserver'
     \   ? function('ale#completion#HandleTSServerResponse')
     \   : function('ale#completion#HandleLSPResponse')
-
-    let l:lsp_details = ale#lsp_linter#StartLSP(l:buffer, a:linter, l:Callback)
-
-    if empty(l:lsp_details)
-        return 0
-    endif
-
-    let l:id = l:lsp_details.connection_id
+    call ale#lsp#RegisterCallback(l:id, l:Callback)
 
     if a:linter.lsp is# 'tsserver'
         let l:message = ale#lsp#tsserver_message#Completions(
@@ -407,7 +461,7 @@ function! s:GetLSPCompletions(linter) abort
     else
         " Send a message saying the buffer has changed first, otherwise
         " completions won't know what text is nearby.
-        call ale#lsp#NotifyForChanges(l:lsp_details)
+        call ale#lsp#NotifyForChanges(l:id, l:buffer)
 
         " For LSP completions, we need to clamp the column to the length of
         " the line. python-language-server and perhaps others do not implement
@@ -423,7 +477,7 @@ function! s:GetLSPCompletions(linter) abort
         \)
     endif
 
-    let l:request_id = ale#lsp#Send(l:id, l:message, l:lsp_details.project_root)
+    let l:request_id = ale#lsp#Send(l:id, l:message)
 
     if l:request_id
         let b:ale_completion_info.conn_id = l:id
@@ -433,6 +487,21 @@ function! s:GetLSPCompletions(linter) abort
             let b:ale_completion_info.completion_filter = a:linter.completion_filter
         endif
     endif
+endfunction
+
+function! s:GetLSPCompletions(linter) abort
+    let l:buffer = bufnr('')
+    let l:lsp_details = ale#lsp_linter#StartLSP(l:buffer, a:linter)
+
+    if empty(l:lsp_details)
+        return 0
+    endif
+
+    let l:id = l:lsp_details.connection_id
+
+    let l:OnReady = function('s:OnReady', [a:linter, l:lsp_details])
+
+    call ale#lsp#WaitForCapability(l:id, 'completion', l:OnReady)
 endfunction
 
 function! ale#completion#GetCompletions() abort
@@ -473,7 +542,7 @@ function! s:TimerHandler(...) abort
 
     " When running the timer callback, we have to be sure that the cursor
     " hasn't moved from where it was when we requested completions by typing.
-    if s:timer_pos == [l:line, l:column]
+    if s:timer_pos == [l:line, l:column] && ale#util#Mode() is# 'i'
         call ale#completion#GetCompletions()
     endif
 endfunction
@@ -514,19 +583,7 @@ endfunction
 function! ale#completion#Done() abort
     silent! pclose
 
-    " Reset settings when completion is done.
-    if exists('b:ale_old_omnifunc')
-        if b:ale_old_omnifunc isnot# 'pythoncomplete#Complete'
-            let &l:omnifunc = b:ale_old_omnifunc
-        endif
-
-        unlet b:ale_old_omnifunc
-    endif
-
-    if exists('b:ale_old_completopt')
-        let &l:completeopt = b:ale_old_completopt
-        unlet b:ale_old_completopt
-    endif
+    call ale#completion#RestoreCompletionOptions()
 
     let s:last_done_pos = getcurpos()[1:2]
 endfunction
