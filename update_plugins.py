@@ -67,6 +67,8 @@ mru.vim https://github.com/vim-scripts/mru.vim
 vim-markdown https://github.com/plasticboy/vim-markdown
 comfortable-motion.vim https://github.com/yuttie/comfortable-motion.vim
 vim-phpfmt https://github.com/beanworks/vim-phpfmt
+vim-gutentags https://github.com/ludovicchabant/vim-gutentags
+gutentags_plus https://github.com/skywind3000/gutentags_plus
 """.strip()
 
 GITHUB_ZIP = '%s/archive/master.zip'
